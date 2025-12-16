@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -162,11 +164,39 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		scorecardData, err := r.ScorecardClient.GetScorecardData(ctx, vcsPath, vcsToken)
 		if err != nil {
+			// Check if this is a "not found" error (scorecard data not available yet)
+			if isNotFoundError(err) {
+				logger.Info("Scorecard data not yet available for repository",
+					"organization", organization,
+					"repository", repo,
+					"vcsPath", vcsPath)
+
+				// Create scorecard data with -1 score to indicate unavailable data
+				scorecardData = &scorecard.ScorecardData{
+					Score:      -1,
+					Repository: repo,
+					Timestamp:  time.Now(),
+					Checks:     []scorecard.Check{},
+				}
+
+				// Update metrics with -1 score
+				r.MetricsCollector.UpdateMetrics(
+					req.NamespacedName.String(),
+					organization,
+					repo,
+					scorecardData,
+				)
+
+				// Continue to next repository
+				continue
+			}
+
+			// For other errors, log as error and return to retry
 			logger.Error(err, "Failed to fetch scorecard data",
 				"organization", organization,
 				"repository", repo,
 				"vcsPath", vcsPath)
-			continue
+			return ctrl.Result{}, err
 		}
 
 		// Update metrics
@@ -185,6 +215,14 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		"repositories", len(repos))
 
 	return ctrl.Result{}, nil
+}
+
+// isNotFoundError checks if an error indicates that scorecard data was not found
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "scorecard data not found for")
 }
 
 // SetupWithManager sets up the controller with the Manager

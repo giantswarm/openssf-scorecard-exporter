@@ -127,12 +127,15 @@ The operator exposes the following Prometheus metrics:
 
 ### `openssf_scorecard_overall_score`
 
-Overall OpenSSF Scorecard score for a repository (0-10 scale).
+Overall OpenSSF Scorecard score for a repository (0-10 scale, -1 for unavailable).
 
 **Labels:**
 - `config`: Name of the ConfigMap managing this repository
 - `organization`: GitHub organization
 - `repository`: Repository name
+
+**Special Values:**
+- `-1`: Scorecard data not yet available for this repository
 
 ### `openssf_scorecard_check_score`
 
@@ -175,9 +178,14 @@ Get overall scores for all repositories:
 openssf_scorecard_overall_score
 ```
 
-Find repositories with low scores:
+Find repositories with low scores (excluding unavailable data):
 ```promql
-openssf_scorecard_overall_score < 5
+openssf_scorecard_overall_score < 5 and openssf_scorecard_overall_score >= 0
+```
+
+Find repositories without scorecard data:
+```promql
+openssf_scorecard_overall_score == -1
 ```
 
 Check Branch Protection status across all repos:
@@ -297,6 +305,11 @@ kubectl logs -n openssf-scorecard-exporter-system deployment/openssf-scorecard-e
 2. Check operator logs for errors
 3. Verify the organization has public repositories
 4. Check that repositories have scorecard data available
+
+**Note:** Repositories without scorecard data will show a score of `-1`. This is normal for:
+- New repositories not yet analyzed by OpenSSF Scorecard
+- Repositories that don't meet scorecard analysis criteria
+- Private repositories (scorecard only analyzes public repos)
 
 ### GitHub rate limiting
 
