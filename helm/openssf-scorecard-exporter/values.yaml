@@ -27,6 +27,9 @@ tolerations: []
 # Additional custom pod labels
 podLabels: {}
 
+# Additional custom pod annotations
+podAnnotations: {}
+
 # Pod securityContext
 podSecurityContext:
   runAsNonRoot: true
