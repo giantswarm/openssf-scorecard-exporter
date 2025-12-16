@@ -5,6 +5,7 @@ registry:
   domain: gsociprivate.azurecr.io
 
 monitoring:
+  secure: false
   serviceMonitor:
     enabled: true
     labels: {}
