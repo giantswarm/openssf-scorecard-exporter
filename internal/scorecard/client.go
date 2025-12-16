@@ -28,16 +28,12 @@ import (
 const (
 	// DefaultAPIEndpoint is the default OpenSSF Scorecard API endpoint
 	DefaultAPIEndpoint = "https://api.securityscorecards.dev"
-
-	// GitHubAPIEndpoint is the GitHub API endpoint for listing repositories
-	GitHubAPIEndpoint = "https://api.github.com"
 )
 
 // Client is a client for interacting with OpenSSF Scorecard API
 type Client struct {
-	httpClient        *http.Client
-	apiEndpoint       string
-	githubAPIEndpoint string
+	httpClient  *http.Client
+	apiEndpoint string
 }
 
 // ScorecardData represents the scorecard data for a repository
@@ -64,92 +60,21 @@ type Check struct {
 	Reason string
 }
 
-// GitHubRepository represents a GitHub repository
-type GitHubRepository struct {
-	Name     string `json:"name"`
-	FullName string `json:"full_name"`
-	Private  bool   `json:"private"`
-	Fork     bool   `json:"fork"`
-	Archived bool   `json:"archived"`
-	Disabled bool   `json:"disabled"`
-}
-
 // NewClient creates a new OpenSSF Scorecard API client
 func NewClient() *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		apiEndpoint:       DefaultAPIEndpoint,
-		githubAPIEndpoint: GitHubAPIEndpoint,
+		apiEndpoint: DefaultAPIEndpoint,
 	}
-}
-
-// GetRepositories fetches all public repositories for a GitHub organization
-func (c *Client) GetRepositories(ctx context.Context, organization, token string) ([]string, error) {
-	var allRepos []string
-	page := 1
-	perPage := 100
-
-	for {
-		url := fmt.Sprintf("%s/orgs/%s/repos?type=public&per_page=%d&page=%d",
-			c.githubAPIEndpoint, organization, perPage, page)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		// Add GitHub token if provided
-		if token != "" {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		}
-		req.Header.Set("Accept", "application/vnd.github.v3+json")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch repositories: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-		}
-
-		var repos []GitHubRepository
-		if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
-		}
-
-		// No more repositories
-		if len(repos) == 0 {
-			break
-		}
-
-		// Filter for non-archived, non-disabled, non-fork public repositories
-		for _, repo := range repos {
-			if !repo.Private && !repo.Archived && !repo.Disabled && !repo.Fork {
-				allRepos = append(allRepos, repo.Name)
-			}
-		}
-
-		// If we got fewer repos than requested, we've reached the end
-		if len(repos) < perPage {
-			break
-		}
-
-		page++
-	}
-
-	return allRepos, nil
 }
 
 // GetScorecardData fetches scorecard data for a specific repository
-func (c *Client) GetScorecardData(ctx context.Context, organization, repository, token string) (*ScorecardData, error) {
+// The vcsPath should be in the format expected by the scorecard API (e.g., "github.com/org/repo")
+func (c *Client) GetScorecardData(ctx context.Context, vcsPath, token string) (*ScorecardData, error) {
 	// OpenSSF Scorecard API endpoint format
-	url := fmt.Sprintf("%s/projects/github.com/%s/%s",
-		c.apiEndpoint, organization, repository)
+	url := fmt.Sprintf("%s/projects/%s", c.apiEndpoint, vcsPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -168,7 +93,7 @@ func (c *Client) GetScorecardData(ctx context.Context, organization, repository,
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("scorecard data not found for %s/%s", organization, repository)
+		return nil, fmt.Errorf("scorecard data not found for %s", vcsPath)
 	}
 
 	if resp.StatusCode != http.StatusOK {

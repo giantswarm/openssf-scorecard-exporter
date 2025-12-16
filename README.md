@@ -20,17 +20,32 @@ The operator reconciles native Kubernetes ConfigMaps that are labeled with `open
 - **Kubernetes-native**: Built as a Kubernetes operator using kubebuilder
 - **ConfigMap-driven**: Configure organizations to monitor using standard Kubernetes ConfigMaps
 - **Prometheus metrics**: Exposes detailed security scores as Prometheus metrics
-- **GitHub token support**: Optional GitHub token support for higher API rate limits
-- **Multi-organization**: Monitor multiple GitHub organizations simultaneously
+- **VCS Provider Abstraction**: Pluggable architecture supports GitHub, with GitLab and Bitbucket coming soon
+- **VCS token support**: Optional token support for higher API rate limits
+- **Multi-organization**: Monitor multiple organizations across different VCS providers simultaneously
 - **Automatic discovery**: Automatically discovers and monitors public repositories
+- **Self-hosted support**: Compatible with self-hosted VCS instances (GitHub Enterprise, GitLab self-hosted, etc.)
 
 ## Architecture
 
-The operator consists of three main components:
+The operator consists of four main components:
 
 1. **ConfigMap Controller** (`internal/controller/configmap_controller.go`): Watches for ConfigMaps with the specific label and reconciles them
-2. **Scorecard Client** (`internal/scorecard/client.go`): Interfaces with the OpenSSF Scorecard API and GitHub API
-3. **Metrics Collector** (`internal/metrics/collector.go`): Manages and updates Prometheus metrics
+2. **VCS Provider Abstraction** (`internal/vcs/`): Pluggable interface for different version control systems (GitHub, GitLab, etc.)
+3. **Scorecard Client** (`internal/scorecard/client.go`): Interfaces with the OpenSSF Scorecard API
+4. **Metrics Collector** (`internal/metrics/collector.go`): Manages and updates Prometheus metrics
+
+### VCS Provider Architecture
+
+The operator uses a provider pattern to support multiple version control systems:
+
+```
+Controller → Provider Interface → GitHub Provider
+                                → GitLab Provider (future)
+                                → Bitbucket Provider (future)
+```
+
+This design allows easy extension to support additional VCS platforms without modifying the core reconciliation logic.
 
 ## Installation
 
@@ -100,8 +115,10 @@ data:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `organization` | Yes | GitHub organization name to monitor |
-| `tokenSecret` | No | Name of the Kubernetes Secret containing the GitHub token |
+| `organization` | Yes | Organization/group name to monitor |
+| `providerType` | No | VCS provider type: `github` (default), `gitlab`, `bitbucket` |
+| `baseURL` | No | Custom VCS API base URL (for self-hosted instances) |
+| `tokenSecret` | No | Name of the Kubernetes Secret containing the VCS token |
 | `tokenSecretKey` | No | Key in the Secret containing the token (defaults to "token") |
 
 ## Metrics

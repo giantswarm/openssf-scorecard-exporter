@@ -29,28 +29,36 @@ import (
 
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/metrics"
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/scorecard"
+	"github.com/giantswarm/openssf-scorecard-exporter/internal/vcs"
 )
 
 const (
 	// ScorecardLabelKey is the label key that identifies ConfigMaps to reconcile
 	ScorecardLabelKey = "openssf-scorecard.giantswarm.io/enabled"
-	
-	// OrganizationKey is the ConfigMap data key for the GitHub organization
+
+	// OrganizationKey is the ConfigMap data key for the organization/group
 	OrganizationKey = "organization"
-	
-	// TokenSecretKey is the ConfigMap data key for the GitHub token secret reference
+
+	// ProviderTypeKey is the ConfigMap data key for the VCS provider type
+	ProviderTypeKey = "providerType"
+
+	// TokenSecretKey is the ConfigMap data key for the VCS token secret reference
 	TokenSecretKey = "tokenSecret"
-	
-	// TokenSecretKeyName is the ConfigMap data key for the GitHub token secret key name
+
+	// TokenSecretKeyName is the ConfigMap data key for the token secret key name
 	TokenSecretKeyName = "tokenSecretKey"
+
+	// BaseURLKey is the ConfigMap data key for custom VCS API base URL
+	BaseURLKey = "baseURL"
 )
 
 // ConfigMapReconciler reconciles ConfigMap objects for OpenSSF Scorecard
 type ConfigMapReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	ScorecardClient   *scorecard.Client
-	MetricsCollector  *metrics.Collector
+	Scheme           *runtime.Scheme
+	ScorecardClient  *scorecard.Client
+	MetricsCollector *metrics.Collector
+	ProviderFactory  *vcs.ProviderFactory
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
@@ -69,8 +77,8 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	logger.Info("Reconciling ConfigMap for OpenSSF Scorecard", 
-		"namespace", configMap.Namespace, 
+	logger.Info("Reconciling ConfigMap for OpenSSF Scorecard",
+		"namespace", configMap.Namespace,
 		"name", configMap.Name)
 
 	// Extract organization from ConfigMap
@@ -80,39 +88,64 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	// Extract optional GitHub token from referenced secret
-	var githubToken string
+	// Extract provider type (defaults to GitHub)
+	providerType := vcs.ProviderType(configMap.Data[ProviderTypeKey])
+	if providerType == "" {
+		providerType = vcs.ProviderTypeGitHub
+	}
+
+	// Extract optional base URL for custom VCS instances
+	baseURL := configMap.Data[BaseURLKey]
+
+	// Extract optional VCS token from referenced secret
+	var vcsToken string
 	if tokenSecretName, hasToken := configMap.Data[TokenSecretKey]; hasToken && tokenSecretName != "" {
 		tokenKeyName := configMap.Data[TokenSecretKeyName]
 		if tokenKeyName == "" {
 			tokenKeyName = "token" // default key name
 		}
-		
+
 		var secret corev1.Secret
 		secretKey := client.ObjectKey{
 			Namespace: configMap.Namespace,
 			Name:      tokenSecretName,
 		}
-		
+
 		if err := r.Get(ctx, secretKey, &secret); err != nil {
-			logger.Error(err, "Failed to fetch GitHub token secret", "secret", tokenSecretName)
+			logger.Error(err, "Failed to fetch VCS token secret", "secret", tokenSecretName)
 			return ctrl.Result{}, err
 		}
-		
+
 		tokenBytes, ok := secret.Data[tokenKeyName]
 		if !ok {
-			logger.Error(fmt.Errorf("token key not found in secret"), 
-				"Failed to find token key", 
-				"secret", tokenSecretName, 
+			logger.Error(fmt.Errorf("token key not found in secret"),
+				"Failed to find token key",
+				"secret", tokenSecretName,
 				"key", tokenKeyName)
 			return ctrl.Result{}, nil
 		}
-		githubToken = string(tokenBytes)
+		vcsToken = string(tokenBytes)
 	}
 
-	// Fetch repositories for the organization
-	logger.Info("Fetching repositories for organization", "organization", organization)
-	repos, err := r.ScorecardClient.GetRepositories(ctx, organization, githubToken)
+	// Create VCS provider
+	provider, err := r.ProviderFactory.CreateProvider(&vcs.Config{
+		Type:         providerType,
+		Token:        vcsToken,
+		BaseURL:      baseURL,
+		Organization: organization,
+	})
+	if err != nil {
+		logger.Error(err, "Failed to create VCS provider", "providerType", providerType)
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Using VCS provider",
+		"provider", provider.GetProviderType(),
+		"organization", organization)
+
+	// Fetch repositories using the VCS provider
+	logger.Info("Fetching repositories", "organization", organization)
+	repos, err := provider.GetRepositories(ctx, organization)
 	if err != nil {
 		logger.Error(err, "Failed to fetch repositories", "organization", organization)
 		return ctrl.Result{}, err
@@ -123,12 +156,16 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Fetch scorecard data for each repository
 	for _, repo := range repos {
 		logger.Info("Fetching scorecard data", "repository", repo)
-		
-		scorecardData, err := r.ScorecardClient.GetScorecardData(ctx, organization, repo, githubToken)
+
+		// Construct the VCS path for the scorecard API
+		vcsPath := provider.GetScorecardURL(organization, repo)
+
+		scorecardData, err := r.ScorecardClient.GetScorecardData(ctx, vcsPath, vcsToken)
 		if err != nil {
-			logger.Error(err, "Failed to fetch scorecard data", 
-				"organization", organization, 
-				"repository", repo)
+			logger.Error(err, "Failed to fetch scorecard data",
+				"organization", organization,
+				"repository", repo,
+				"vcsPath", vcsPath)
 			continue
 		}
 
@@ -141,9 +178,10 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		)
 	}
 
-	logger.Info("Successfully reconciled ConfigMap", 
-		"namespace", configMap.Namespace, 
+	logger.Info("Successfully reconciled ConfigMap",
+		"namespace", configMap.Namespace,
 		"name", configMap.Name,
+		"provider", provider.GetProviderType(),
 		"repositories", len(repos))
 
 	return ctrl.Result{}, nil
@@ -166,4 +204,3 @@ func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithEventFilter(labelPredicate).
 		Complete(r)
 }
-

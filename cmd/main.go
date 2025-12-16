@@ -40,6 +40,7 @@ import (
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/controller"
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/metrics"
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/scorecard"
+	"github.com/giantswarm/openssf-scorecard-exporter/internal/vcs"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -208,12 +209,16 @@ func main() {
 	// Initialize Prometheus metrics collector
 	metricsCollector := metrics.NewCollector()
 
+	// Initialize VCS provider factory
+	providerFactory := vcs.NewProviderFactory()
+
 	// Set up ConfigMap controller
 	if err = (&controller.ConfigMapReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		ScorecardClient:  scorecardClient,
 		MetricsCollector: metricsCollector,
+		ProviderFactory:  providerFactory,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
 		os.Exit(1)
