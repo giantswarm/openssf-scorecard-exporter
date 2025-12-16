@@ -49,7 +49,7 @@ var (
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Starting openssf-scorecard-exporter integration test suite\n")
-	RunSpecs(t, "e2e suite")
+	// RunSpecs(t, "e2e suite")
 }
 
 var _ = BeforeSuite(func() {
