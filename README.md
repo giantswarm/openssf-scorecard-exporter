@@ -1,64 +1,310 @@
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/giantswarm/openssf-scorecard-exporter/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/giantswarm/openssf-scorecard-exporter/tree/main)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/giantswarm/openssf-scorecard-exporter/badge)](https://securityscorecards.dev/viewer/?uri=github.com/giantswarm/openssf-scorecard-exporter)
 
-[Guide about how to manage an app on Giant Swarm](https://handbook.giantswarm.io/docs/dev-and-releng/app-developer-processes/adding_app_to_appcatalog/)
+# OpenSSF Scorecard Exporter
 
-# openssf-scorecard-exporter chart
+A Kubernetes operator that exports [OpenSSF Scorecard](https://securityscorecards.dev/) metrics for GitHub organizations as Prometheus metrics.
 
-Giant Swarm offers a openssf-scorecard-exporter App which can be installed in workload clusters.
-Here, we define the openssf-scorecard-exporter chart with its templates and default configuration.
+## Overview
 
-**What is this app?**
+The OpenSSF Scorecard Exporter is a kubebuilder-based Kubernetes operator that helps provide visibility into your organization's code security practices. It automatically:
 
-**Why did we add it?**
+1. Discovers public repositories in specified GitHub organizations
+2. Fetches OpenSSF Scorecard data for each repository
+3. Exposes the security scores as Prometheus metrics
 
-**Who can use it?**
+The operator reconciles native Kubernetes ConfigMaps that are labeled with `openssf-scorecard.giantswarm.io/enabled=true`, making it easy to manage multiple organization configurations.
 
-## Installing
+## Features
 
-There are several ways to install this app onto a workload cluster.
+- **Kubernetes-native**: Built as a Kubernetes operator using kubebuilder
+- **ConfigMap-driven**: Configure organizations to monitor using standard Kubernetes ConfigMaps
+- **Prometheus metrics**: Exposes detailed security scores as Prometheus metrics
+- **GitHub token support**: Optional GitHub token support for higher API rate limits
+- **Multi-organization**: Monitor multiple GitHub organizations simultaneously
+- **Automatic discovery**: Automatically discovers and monitors public repositories
 
-- [Using GitOps to instantiate the App](https://docs.giantswarm.io/tutorials/continuous-deployment/apps/add-appcr/)
-- By creating an [App resource](https://docs.giantswarm.io/reference/platform-api/crd/apps.application.giantswarm.io) using the platform API as explained in [Getting started with App Platform](https://docs.giantswarm.io/tutorials/fleet-management/app-platform/).
+## Architecture
 
-## Configuring
+The operator consists of three main components:
 
-### values.yaml
+1. **ConfigMap Controller** (`internal/controller/configmap_controller.go`): Watches for ConfigMaps with the specific label and reconciles them
+2. **Scorecard Client** (`internal/scorecard/client.go`): Interfaces with the OpenSSF Scorecard API and GitHub API
+3. **Metrics Collector** (`internal/metrics/collector.go`): Manages and updates Prometheus metrics
 
-**This is an example of a values file you could upload using our web interface.**
+## Installation
 
-```yaml
-# values.yaml
+### Using Helm
 
+```bash
+helm install openssf-scorecard-exporter ./helm/openssf-scorecard-exporter
 ```
 
-### Sample App CR and ConfigMap for the management cluster
+### Using kubectl
 
-If you have access to the Kubernetes API on the management cluster, you could create the App CR and ConfigMap directly.
-
-Here is an example that would install the app to workload cluster `abc12`:
-
-```yaml
-# appCR.yaml
-
+```bash
+make build-installer
+kubectl apply -f dist/install.yaml
 ```
 
-```yaml
-# user-values-configmap.yaml
+## Configuration
 
+To monitor an organization's repositories, create a ConfigMap with the required label:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: giantswarm-scorecard-config
+  namespace: default
+  labels:
+    openssf-scorecard.giantswarm.io/enabled: "true"
+data:
+  organization: "giantswarm"  # Required: GitHub organization name
 ```
 
-See our [full reference on how to configure apps](https://docs.giantswarm.io/tutorials/fleet-management/app-platform/app-configuration/) for more details.
+### With GitHub Token (Recommended)
 
-## Compatibility
+To avoid GitHub API rate limits, you can provide a GitHub token:
 
-This app has been tested to work with the following workload cluster release versions:
+1. Create a secret with your GitHub token:
 
-- _add release version_
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-token
+  namespace: default
+type: Opaque
+stringData:
+  token: "ghp_your_github_token_here"
+```
 
-## Limitations
+2. Reference it in your ConfigMap:
 
-Some apps have restrictions on how they can be deployed.
-Not following these limitations will most likely result in a broken deployment.
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: giantswarm-scorecard-config
+  namespace: default
+  labels:
+    openssf-scorecard.giantswarm.io/enabled: "true"
+data:
+  organization: "giantswarm"
+  tokenSecret: "github-token"        # Name of the secret
+  tokenSecretKey: "token"             # Key in the secret (defaults to "token")
+```
 
-- _add limitation_
+### ConfigMap Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `organization` | Yes | GitHub organization name to monitor |
+| `tokenSecret` | No | Name of the Kubernetes Secret containing the GitHub token |
+| `tokenSecretKey` | No | Key in the Secret containing the token (defaults to "token") |
+
+## Metrics
+
+The operator exposes the following Prometheus metrics:
+
+### `openssf_scorecard_overall_score`
+
+Overall OpenSSF Scorecard score for a repository (0-10 scale).
+
+**Labels:**
+- `config`: Name of the ConfigMap managing this repository
+- `organization`: GitHub organization
+- `repository`: Repository name
+
+### `openssf_scorecard_check_score`
+
+Score for individual OpenSSF Scorecard checks (0-10 scale, -1 for unavailable).
+
+**Labels:**
+- `config`: Name of the ConfigMap managing this repository
+- `organization`: GitHub organization
+- `repository`: Repository name
+- `check`: Name of the security check (e.g., "Branch-Protection", "Code-Review")
+
+### `openssf_scorecard_check_status`
+
+Binary status of individual checks.
+
+**Labels:**
+- `config`: Name of the ConfigMap managing this repository
+- `organization`: GitHub organization
+- `repository`: Repository name
+- `check`: Name of the security check
+
+**Values:**
+- `1`: Pass
+- `0`: Fail
+- `-1`: Unavailable/Unknown
+
+### `openssf_scorecard_last_update_timestamp`
+
+Unix timestamp of the last scorecard data update.
+
+**Labels:**
+- `config`: Name of the ConfigMap managing this repository
+- `organization`: GitHub organization
+- `repository`: Repository name
+
+## Example Prometheus Queries
+
+Get overall scores for all repositories:
+```promql
+openssf_scorecard_overall_score
+```
+
+Find repositories with low scores:
+```promql
+openssf_scorecard_overall_score < 5
+```
+
+Check Branch Protection status across all repos:
+```promql
+openssf_scorecard_check_score{check="Branch-Protection"}
+```
+
+Count failing checks per repository:
+```promql
+count by (organization, repository) (openssf_scorecard_check_status{status="0"})
+```
+
+## Development
+
+### Prerequisites
+
+- Go 1.23 or later
+- Kubernetes cluster (or Kind for local development)
+- kubectl configured to access your cluster
+
+### Building
+
+Build the operator binary:
+```bash
+make build
+```
+
+Build the Docker image:
+```bash
+make docker-build IMG=your-registry/openssf-scorecard-exporter:latest
+```
+
+### Running Locally
+
+Run the operator outside the cluster (useful for development):
+```bash
+make run
+```
+
+### Testing
+
+Run unit tests:
+```bash
+make test
+```
+
+Run e2e tests (requires Kind):
+```bash
+make test-e2e
+```
+
+### Linting
+
+Run the linter:
+```bash
+make lint
+```
+
+Auto-fix linting issues:
+```bash
+make lint-fix
+```
+
+## RBAC Permissions
+
+The operator requires the following Kubernetes permissions:
+
+- **ConfigMaps**: `get`, `list`, `watch`, `update`, `patch` (for status updates)
+- **Secrets**: `get`, `list`, `watch` (for GitHub token access)
+
+These are automatically configured in the generated RBAC manifests.
+
+## Repository Filtering
+
+The operator automatically filters repositories and only monitors:
+- Public repositories
+- Non-archived repositories
+- Non-disabled repositories
+- Non-forked repositories
+
+Private repositories are excluded as OpenSSF Scorecard primarily analyzes public repositories.
+
+## API Rate Limits
+
+### GitHub API
+
+The operator uses the GitHub API to discover repositories. Without authentication:
+- Rate limit: 60 requests/hour per IP
+
+With authentication (recommended):
+- Rate limit: 5,000 requests/hour
+
+### OpenSSF Scorecard API
+
+The Scorecard API has its own rate limits. If you encounter rate limiting issues, consider:
+- Implementing caching (future enhancement)
+- Adjusting reconciliation intervals
+- Using a GitHub token for authentication
+
+## Troubleshooting
+
+### ConfigMap not reconciling
+
+Check that the ConfigMap has the required label:
+```bash
+kubectl get configmap <name> -o jsonpath='{.metadata.labels}'
+```
+
+View operator logs:
+```bash
+kubectl logs -n openssf-scorecard-exporter-system deployment/openssf-scorecard-exporter-controller-manager
+```
+
+### No metrics appearing
+
+1. Verify the ConfigMap is properly labeled
+2. Check operator logs for errors
+3. Verify the organization has public repositories
+4. Check that repositories have scorecard data available
+
+### GitHub rate limiting
+
+If you see rate limit errors in the logs:
+1. Create a GitHub Personal Access Token
+2. Store it in a Kubernetes Secret
+3. Reference the secret in your ConfigMap
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+## Links
+
+- [OpenSSF Scorecard Project](https://securityscorecards.dev/)
+- [OpenSSF Scorecard Documentation](https://github.com/ossf/scorecard)
+- [Giant Swarm Documentation](https://docs.giantswarm.io/)
+- [Kubebuilder](https://book.kubebuilder.io/)
