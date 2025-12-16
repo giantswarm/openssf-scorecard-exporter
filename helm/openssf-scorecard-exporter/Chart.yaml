@@ -11,7 +11,7 @@ description: OpenSSF Scorecard Exporter scrapes the OpenSSF API and exposes Prom
 
 home: https://github.com/giantswarm/openssf-scorecard-exporter
 
-icon: https://s.giantswarm.io/app-icons/openssf/1/light.png
+icon: https://s.giantswarm.io/app-icons/openssf/2/light.png
 
 version: 0.0.0-dev
 annotations:
