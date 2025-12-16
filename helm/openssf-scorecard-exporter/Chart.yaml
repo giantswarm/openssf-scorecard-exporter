@@ -7,7 +7,7 @@ appVersion: 0.0.1
 
 name: openssf-scorecard-exporter
 
-description: OpenSSF Scorecard Exporter for scrapping the OpenSSF API and sending metrics to Grafana.
+description: OpenSSF Scorecard Exporter scrapes the OpenSSF API and exposes Prometheus metrics for Scorecard data.
 
 home: https://github.com/giantswarm/openssf-scorecard-exporter
 
