@@ -2,7 +2,7 @@ image:
   name: "giantswarm/openssf-scorecard-exporter"
   tag: ""
 registry:
-  domain: gsociprivate.azurecr.io
+  domain: gsoci.azurecr.io
 
 monitoring:
   secure: false
@@ -16,8 +16,7 @@ monitoring:
         regex: pod|service|container
     metricRelabelings: []
 
-imagePullSecrets:
-  - name: pull-openssf-exporter-secret
+imagePullSecrets: []
 
 pod:
   user:
