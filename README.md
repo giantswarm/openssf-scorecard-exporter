@@ -217,42 +217,6 @@ Auto-fix linting issues:
 make lint-fix
 ```
 
-## RBAC Permissions
-
-The operator requires the following Kubernetes permissions:
-
-- **ConfigMaps**: `get`, `list`, `watch`, `update`, `patch` (for status updates)
-- **Secrets**: `get`, `list`, `watch` (for GitHub token access)
-
-These are automatically configured in the generated RBAC manifests.
-
-## Repository Filtering
-
-The operator automatically filters repositories and only monitors:
-- Public repositories
-- Non-archived repositories
-- Non-disabled repositories
-- Non-forked repositories
-
-Private repositories are excluded as OpenSSF Scorecard primarily analyzes public repositories.
-
-## API Rate Limits
-
-### GitHub API
-
-The operator uses the GitHub API to discover repositories. Without authentication:
-- Rate limit: 60 requests/hour per IP
-
-With authentication (recommended):
-- Rate limit: 5,000 requests/hour
-
-### OpenSSF Scorecard API
-
-The Scorecard API has its own rate limits. If you encounter rate limiting issues, consider:
-- Implementing caching (future enhancement)
-- Adjusting reconciliation intervals
-- Using a GitHub token for authentication
-
 ## Troubleshooting
 
 ### ConfigMap not reconciling
