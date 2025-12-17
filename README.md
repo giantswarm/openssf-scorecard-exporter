@@ -84,7 +84,7 @@ data:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `organization` | Yes | Organization/group name to monitor |
-| `providerType` | No | VCS provider type: `github` (default), `gitlab`, `bitbucket` |
+| `providerType` | No | VCS provider type: `github` (default) |
 | `baseURL` | No | Custom VCS API base URL (for self-hosted instances) |
 | `tokenSecret` | No | Name of the Kubernetes Secret containing the VCS token |
 | `tokenSecretKey` | No | Key in the Secret containing the token (defaults to "token") |

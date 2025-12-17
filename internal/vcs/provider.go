@@ -27,12 +27,6 @@ type ProviderType string
 const (
 	// ProviderTypeGitHub represents GitHub as the VCS provider
 	ProviderTypeGitHub ProviderType = "github"
-
-	// ProviderTypeGitLab represents GitLab as the VCS provider (future)
-	ProviderTypeGitLab ProviderType = "gitlab"
-
-	// ProviderTypeBitbucket represents Bitbucket as the VCS provider (future)
-	ProviderTypeBitbucket ProviderType = "bitbucket"
 )
 
 // Repository represents a version control repository
