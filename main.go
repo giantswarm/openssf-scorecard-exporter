@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -30,6 +31,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -179,6 +181,23 @@ func main() {
 		})
 	}
 
+	// Get the namespace to watch from the POD_NAMESPACE environment variable
+	watchNamespace := os.Getenv("POD_NAMESPACE")
+	if watchNamespace == "" {
+		setupLog.Error(errors.New("POD_NAMESPACE not set"), "POD_NAMESPACE is required.")
+		os.Exit(1)
+	} else {
+		setupLog.Info("Restricting watch to namespace", "namespace", watchNamespace)
+	}
+
+	// Configure cache options to watch only the specified namespace
+	cacheOptions := cache.Options{}
+	if watchNamespace != "" {
+		cacheOptions.DefaultNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -186,6 +205,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "feabfa2f.giantswarm.io",
+		Cache:                  cacheOptions,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
