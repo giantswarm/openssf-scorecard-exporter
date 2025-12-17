@@ -279,13 +279,6 @@ kubectl logs -n openssf-scorecard-exporter-system deployment/openssf-scorecard-e
 - Repositories that don't meet scorecard analysis criteria
 - Private repositories (scorecard only analyzes public repos)
 
-### GitHub rate limiting
-
-If you see rate limit errors in the logs:
-1. Create a GitHub Personal Access Token
-2. Store it in a Kubernetes Secret
-3. Reference the secret in your ConfigMap
-
 ## Contributing
 
 Contributions are welcome! Please:

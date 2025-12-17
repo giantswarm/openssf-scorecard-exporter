@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -162,6 +163,40 @@ func (p *GitHubProvider) fetchRepositoryPage(ctx context.Context, url string) ([
 		return nil, fmt.Errorf("failed to fetch repositories: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Check for rate limiting (HTTP 403 or 429)
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+		body, _ := io.ReadAll(resp.Body)
+
+		// Extract rate limit information from headers
+		rateLimitErr := NewRateLimitError(ProviderTypeGitHub, string(body))
+
+		// X-RateLimit-Limit: maximum number of requests per hour
+		if limit := resp.Header.Get("X-RateLimit-Limit"); limit != "" {
+			if limitInt, err := strconv.Atoi(limit); err == nil {
+				// X-RateLimit-Remaining: remaining requests
+				remaining, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
+				rateLimitErr.WithRateLimitInfo(limitInt, remaining)
+			}
+		}
+
+		// X-RateLimit-Reset: timestamp when rate limit resets
+		if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
+			if resetInt, err := strconv.ParseInt(reset, 10, 64); err == nil {
+				resetTime := time.Unix(resetInt, 0)
+				rateLimitErr.WithResetTime(resetTime)
+			}
+		}
+
+		// Retry-After header (in seconds)
+		if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
+			if seconds, err := strconv.Atoi(retryAfter); err == nil {
+				rateLimitErr.WithRetryAfter(time.Duration(seconds) * time.Second)
+			}
+		}
+
+		return nil, rateLimitErr
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

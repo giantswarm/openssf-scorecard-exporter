@@ -149,6 +149,21 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	logger.Info("Fetching repositories", "organization", organization)
 	repos, err := provider.GetRepositories(ctx, organization)
 	if err != nil {
+		// Check if this is a rate limit error
+		if vcs.IsRateLimitError(err) {
+			retryAfter := vcs.GetRetryAfter(err)
+			logger.Info("VCS API rate limit encountered, will retry later",
+				"organization", organization,
+				"provider", provider.GetProviderType(),
+				"retryAfter", retryAfter,
+				"error", err.Error())
+
+			// Return with requeue after the rate limit period
+			// This prevents immediate retry and respects the rate limit
+			return ctrl.Result{RequeueAfter: retryAfter}, nil
+		}
+
+		// For other errors, log and return error to trigger standard retry
 		logger.Error(err, "Failed to fetch repositories", "organization", organization)
 		return ctrl.Result{}, err
 	}
