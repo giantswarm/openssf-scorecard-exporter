@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- changed: `app.giantswarm.io` label group was changed to `application.giantswarm.io`
+## [0.0.1] - 2025-12-17
 
-[Unreleased]: https://github.com/giantswarm/openssf-scorecard-exporter/tree/main
+### Added
+
+- Initial release of `openssf-scorecard-exporter`.
+
+[Unreleased]: https://github.com/giantswarm/openssf-scorecard-exporter/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/giantswarm/openssf-scorecard-exporter/releases/tag/v0.0.1
