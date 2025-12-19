@@ -18,17 +18,18 @@ package vcs
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strconv"
-	"time"
+	"net/url"
+	"strings"
+
+	"github.com/google/go-github/v69/github"
+	"golang.org/x/oauth2"
 )
 
 const (
 	// DefaultGitHubAPIURL is the default GitHub API endpoint
-	DefaultGitHubAPIURL = "https://api.github.com"
+	DefaultGitHubAPIURL = "https://api.github.com/"
 
 	// DefaultGitHubScorecardURL is the base URL for GitHub repositories in OpenSSF Scorecard
 	DefaultGitHubScorecardURL = "github.com"
@@ -36,74 +37,67 @@ const (
 
 // GitHubProvider implements the Provider interface for GitHub
 type GitHubProvider struct {
-	httpClient   *http.Client
-	baseURL      string
+	client       *github.Client
 	scorecardURL string
-	token        string
-}
-
-// gitHubRepository represents a GitHub repository from the API
-type gitHubRepository struct {
-	Name          string `json:"name"`
-	FullName      string `json:"full_name"`
-	HTMLURL       string `json:"html_url"`
-	Private       bool   `json:"private"`
-	Fork          bool   `json:"fork"`
-	Archived      bool   `json:"archived"`
-	Disabled      bool   `json:"disabled"`
-	DefaultBranch string `json:"default_branch"`
 }
 
 // NewGitHubProvider creates a new GitHub provider
 func NewGitHubProvider(config *Config) (Provider, error) {
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = DefaultGitHubAPIURL
+	var tc *http.Client
+	if config.Token != "" {
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: config.Token},
+		)
+		tc = oauth2.NewClient(ctx, ts)
+	}
+
+	client := github.NewClient(tc)
+
+	if config.BaseURL != "" {
+		baseURL := config.BaseURL
+		// Ensure base URL ends with a slash for go-github
+		if !strings.HasSuffix(baseURL, "/") {
+			baseURL += "/"
+		}
+		u, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse base URL: %w", err)
+		}
+		client.BaseURL = u
 	}
 
 	return &GitHubProvider{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		baseURL:      baseURL,
+		client:       client,
 		scorecardURL: DefaultGitHubScorecardURL,
-		token:        config.Token,
 	}, nil
 }
 
 // GetRepositories fetches all public repositories for a GitHub organization
 func (p *GitHubProvider) GetRepositories(ctx context.Context, organization string) ([]string, error) {
 	var allRepos []string
-	page := 1
-	perPage := 100
+	opts := &github.RepositoryListByOrgOptions{
+		Type:        "public",
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
 
 	for {
-		url := fmt.Sprintf("%s/orgs/%s/repos?type=public&per_page=%d&page=%d",
-			p.baseURL, organization, perPage, page)
-
-		repos, err := p.fetchRepositoryPage(ctx, url)
+		repos, resp, err := p.client.Repositories.ListByOrg(ctx, organization, opts)
 		if err != nil {
-			return nil, err
-		}
-
-		// No more repositories
-		if len(repos) == 0 {
-			break
+			return nil, p.handleError(err)
 		}
 
 		// Filter and collect repository names
 		for _, repo := range repos {
 			if p.shouldIncludeRepository(repo) {
-				allRepos = append(allRepos, repo.Name)
+				allRepos = append(allRepos, repo.GetName())
 			}
 		}
 
-		// If we got fewer repos than requested, we've reached the end
-		if len(repos) < perPage {
+		if resp.NextPage == 0 {
 			break
 		}
-
-		page++
+		opts.Page = resp.NextPage
 	}
 
 	return allRepos, nil
@@ -111,32 +105,12 @@ func (p *GitHubProvider) GetRepositories(ctx context.Context, organization strin
 
 // GetRepositoryDetails fetches detailed information about a specific repository
 func (p *GitHubProvider) GetRepositoryDetails(ctx context.Context, organization, repository string) (*Repository, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s", p.baseURL, organization, repository)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	repo, _, err := p.client.Repositories.Get(ctx, organization, repository)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, p.handleError(err)
 	}
 
-	p.addAuthHeaders(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch repository details: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var ghRepo gitHubRepository
-	if err := json.NewDecoder(resp.Body).Decode(&ghRepo); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return p.convertToRepository(ghRepo), nil
+	return p.convertToRepository(repo), nil
 }
 
 // GetProviderType returns the provider type
@@ -149,91 +123,50 @@ func (p *GitHubProvider) GetScorecardURL(organization, repository string) string
 	return fmt.Sprintf("%s/%s/%s", p.scorecardURL, organization, repository)
 }
 
-// fetchRepositoryPage fetches a single page of repositories from the GitHub API
-func (p *GitHubProvider) fetchRepositoryPage(ctx context.Context, url string) ([]gitHubRepository, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+// handleError maps GitHub API errors to internal error types
+func (p *GitHubProvider) handleError(err error) error {
+	if err == nil {
+		return nil
 	}
 
-	p.addAuthHeaders(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch repositories: %w", err)
+	// Handle standard rate limit errors
+	if rle, ok := err.(*github.RateLimitError); ok {
+		rlErr := NewRateLimitError(ProviderTypeGitHub, err.Error()).
+			WithRateLimitInfo(rle.Rate.Limit, rle.Rate.Remaining).
+			WithResetTime(rle.Rate.Reset.Time)
+		return rlErr
 	}
-	defer resp.Body.Close()
 
-	// Check for rate limiting (HTTP 403 or 429)
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-		body, _ := io.ReadAll(resp.Body)
-
-		// Extract rate limit information from headers
-		rateLimitErr := NewRateLimitError(ProviderTypeGitHub, string(body))
-
-		// X-RateLimit-Limit: maximum number of requests per hour
-		if limit := resp.Header.Get("X-RateLimit-Limit"); limit != "" {
-			if limitInt, err := strconv.Atoi(limit); err == nil {
-				// X-RateLimit-Remaining: remaining requests
-				remaining, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
-				rateLimitErr.WithRateLimitInfo(limitInt, remaining)
-			}
+	// Handle secondary rate limit (abuse) errors
+	if ale, ok := err.(*github.AbuseRateLimitError); ok {
+		rlErr := NewRateLimitError(ProviderTypeGitHub, err.Error())
+		if ale.RetryAfter != nil {
+			rlErr.WithRetryAfter(*ale.RetryAfter)
 		}
-
-		// X-RateLimit-Reset: timestamp when rate limit resets
-		if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
-			if resetInt, err := strconv.ParseInt(reset, 10, 64); err == nil {
-				resetTime := time.Unix(resetInt, 0)
-				rateLimitErr.WithResetTime(resetTime)
-			}
-		}
-
-		// Retry-After header (in seconds)
-		if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				rateLimitErr.WithRetryAfter(time.Duration(seconds) * time.Second)
-			}
-		}
-
-		return nil, rateLimitErr
+		return rlErr
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var repos []gitHubRepository
-	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return repos, nil
-}
-
-// addAuthHeaders adds authentication headers to the request
-func (p *GitHubProvider) addAuthHeaders(req *http.Request) {
-	if p.token != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.token))
-	}
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	return err
 }
 
 // shouldIncludeRepository determines if a repository should be included in results
-func (p *GitHubProvider) shouldIncludeRepository(repo gitHubRepository) bool {
-	return !repo.Private && !repo.Archived && !repo.Disabled && !repo.Fork
+func (p *GitHubProvider) shouldIncludeRepository(repo *github.Repository) bool {
+	if repo == nil {
+		return false
+	}
+	return !repo.GetPrivate() && !repo.GetArchived() && !repo.GetDisabled() && !repo.GetFork()
 }
 
 // convertToRepository converts a GitHub repository to the generic Repository type
-func (p *GitHubProvider) convertToRepository(ghRepo gitHubRepository) *Repository {
+func (p *GitHubProvider) convertToRepository(repo *github.Repository) *Repository {
 	return &Repository{
-		Name:          ghRepo.Name,
-		FullName:      ghRepo.FullName,
-		URL:           ghRepo.HTMLURL,
-		DefaultBranch: ghRepo.DefaultBranch,
-		IsPrivate:     ghRepo.Private,
-		IsArchived:    ghRepo.Archived,
-		IsFork:        ghRepo.Fork,
-		IsDisabled:    ghRepo.Disabled,
+		Name:          repo.GetName(),
+		FullName:      repo.GetFullName(),
+		URL:           repo.GetHTMLURL(),
+		DefaultBranch: repo.GetDefaultBranch(),
+		IsPrivate:     repo.GetPrivate(),
+		IsArchived:    repo.GetArchived(),
+		IsFork:        repo.GetFork(),
+		IsDisabled:    repo.GetDisabled(),
 	}
 }

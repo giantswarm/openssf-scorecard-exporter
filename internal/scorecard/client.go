@@ -36,30 +36,6 @@ type Client struct {
 	apiEndpoint string
 }
 
-// ScorecardData represents the scorecard data for a repository
-type ScorecardData struct {
-	// Overall score (0-10)
-	Score float64
-
-	// Individual check results
-	Checks []Check
-
-	// Timestamp of the scorecard data
-	Timestamp time.Time
-
-	// Repository metadata
-	Repository string
-	Commit     string
-}
-
-// Check represents an individual scorecard check result
-type Check struct {
-	Name   string
-	Score  int
-	Status string
-	Reason string
-}
-
 // NewClient creates a new OpenSSF Scorecard API client
 func NewClient() *Client {
 	return &Client{
@@ -102,27 +78,7 @@ func (c *Client) GetScorecardData(ctx context.Context, vcsPath, token string) (*
 	}
 
 	// Parse the response
-	var apiResponse struct {
-		Score float64 `json:"score"`
-		Date  string  `json:"date"`
-		Repo  struct {
-			Name   string `json:"name"`
-			Commit string `json:"commit"`
-		} `json:"repo"`
-		Scorecard struct {
-			Version string `json:"version"`
-		} `json:"scorecard"`
-		Checks []struct {
-			Name          string `json:"name"`
-			Score         int    `json:"score"`
-			Reason        string `json:"reason"`
-			Documentation struct {
-				Short string `json:"short"`
-				URL   string `json:"url"`
-			} `json:"documentation"`
-		} `json:"checks"`
-	}
-
+	var apiResponse APIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
