@@ -71,9 +71,15 @@ spec:
       containers:
       - name: {{ include "name" . }}
         image: "{{ .Values.registry.domain }}/{{ .Values.image.name }}:{{ .Values.image.tag | default .Chart.Version }}"
-        {{- if not .Values.monitoring.secure }}
         args:
+        {{- if not .Values.monitoring.secure }}
           - "--metrics-secure=false"
+        {{- end }}
+        {{- if .Values.controller.requeueInterval }}
+          - "--requeue-interval={{ .Values.controller.requeueInterval }}"
+        {{- end }}
+        {{- if .Values.controller.maxJitterPercent }}
+          - "--max-jitter-percent={{ .Values.controller.maxJitterPercent }}"
         {{- end }}
         env:
         - name: POD_NAMESPACE

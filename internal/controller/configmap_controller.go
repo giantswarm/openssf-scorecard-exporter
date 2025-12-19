@@ -31,6 +31,7 @@ import (
 
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/metrics"
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/scorecard"
+	"github.com/giantswarm/openssf-scorecard-exporter/internal/utils"
 	"github.com/giantswarm/openssf-scorecard-exporter/internal/vcs"
 )
 
@@ -61,6 +62,8 @@ type ConfigMapReconciler struct {
 	ScorecardClient  *scorecard.Client
 	MetricsCollector *metrics.Collector
 	ProviderFactory  *vcs.ProviderFactory
+	MaxJitterPercent int
+	RequeueInterval  time.Duration
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
@@ -229,7 +232,7 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		"provider", provider.GetProviderType(),
 		"repositories", len(repos))
 
-	return ctrl.Result{}, nil
+	return utils.JitterRequeue(r.RequeueInterval, r.MaxJitterPercent, logger), nil
 }
 
 // isNotFoundError checks if an error indicates that scorecard data was not found
