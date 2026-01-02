@@ -2,12 +2,12 @@
 # for details and background.
 
 apiVersion: v2
-appVersion: 0.0.1
+appVersion: 0.1.0
 name: openssf-scorecard-exporter
 description: OpenSSF Scorecard Exporter scrapes the OpenSSF API and exposes Prometheus metrics for Scorecard data.
 home: https://github.com/giantswarm/openssf-scorecard-exporter
 icon: https://s.giantswarm.io/app-icons/openssf/2/light.png
-version: 0.0.1
+version: 0.1.0
 annotations:
   # Adapt to 'giantswarm' if this application is not to be deployed by customers
   io.giantswarm.application.audience: all
