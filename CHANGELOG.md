@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Automatically re-scan target organizations periodically, with jitter.
+
 ### Changed
 
 - Update prometheus and testing dependencies.

@@ -20,6 +20,19 @@
                     "type": "string"
                 }
             }
+        },
+        "controller": {
+            "type": "object",
+            "properties": {
+                "maxJitterPercent": {
+                    "type": "number",
+                    "description": "The maximum percentage by which to jitter re-reconciliation."
+                },
+                "requeueInterval": {
+                    "type": "string",
+                    "description": "Interval for requeuing ConfigMap reconciliation to refresh scorecard data. Format: duration string (e.g., '1h', '30m', '2h30m'). Defaults to 1 hour +/- jitter."
+                }
+            }
         }
     }
 }

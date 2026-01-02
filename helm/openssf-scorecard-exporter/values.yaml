@@ -58,3 +58,10 @@ resources:
   limits:
     cpu: 100m
     memory: 128Mi
+
+controller:
+  # A jitter of +/- maxJitterPercent% is applied to the requeue interval.
+  maxJitterPercent: 10
+
+  # The interval for requeuing ConfigMap reconciliation to refresh scorecard data
+  requeueInterval: 1h
