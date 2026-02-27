@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-27
+
 ### Changed
 
 - Use AppVersion for image tag defaulting.
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of `openssf-scorecard-exporter`.
 
-[Unreleased]: https://github.com/giantswarm/openssf-scorecard-exporter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/giantswarm/openssf-scorecard-exporter/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/giantswarm/openssf-scorecard-exporter/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/giantswarm/openssf-scorecard-exporter/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/giantswarm/openssf-scorecard-exporter/releases/tag/v0.0.1
