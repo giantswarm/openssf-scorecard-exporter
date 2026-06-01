@@ -1,11 +1,12 @@
 version: 2.1
 orbs:
-  architect: giantswarm/architect@7.1.0
+  architect: giantswarm/architect@9.0.0
 
 workflows:
   package-and-push-chart-on-tag:
     jobs:
     - architect/go-build:
+        context: architect
         name: go-build
         binary: openssf-scorecard-exporter
         resource_class: large
