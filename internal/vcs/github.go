@@ -19,12 +19,8 @@ package vcs
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 
-	"github.com/google/go-github/v84/github"
-	"golang.org/x/oauth2"
+	"github.com/google/go-github/v88/github"
 )
 
 const (
@@ -43,28 +39,19 @@ type GitHubProvider struct {
 
 // NewGitHubProvider creates a new GitHub provider
 func NewGitHubProvider(config *Config) (Provider, error) {
-	var tc *http.Client
+	var opts []github.ClientOptionsFunc
+
 	if config.Token != "" {
-		ctx := context.Background()
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: config.Token},
-		)
-		tc = oauth2.NewClient(ctx, ts)
+		opts = append(opts, github.WithAuthToken(config.Token))
 	}
 
-	client := github.NewClient(tc)
-
 	if config.BaseURL != "" {
-		baseURL := config.BaseURL
-		// Ensure base URL ends with a slash for go-github
-		if !strings.HasSuffix(baseURL, "/") {
-			baseURL += "/"
-		}
-		u, err := url.Parse(baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse base URL: %w", err)
-		}
-		client.BaseURL = u
+		opts = append(opts, github.WithEnterpriseURLs(config.BaseURL, config.BaseURL))
+	}
+
+	client, err := github.NewClient(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
 	return &GitHubProvider{
