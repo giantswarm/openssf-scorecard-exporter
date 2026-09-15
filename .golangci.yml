@@ -29,6 +29,18 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # G204 ("Subprocess launched with variable") is syntactic: it fires on any
+      # non-literal argument regardless of how that argument is derived. Every
+      # exec.Command under test/ passes a hardcoded binary as argv[0] and execs
+      # without a shell, so no argument value can start a different process, and
+      # the values themselves come from package constants or literals. G101 in
+      # test/e2e is a TokenRequest JSON body, not a credential. This is e2e
+      # tooling that only runs under `make test-e2e` against a throwaway kind
+      # cluster. The orb's gosec step reads this file, so the exclusion covers
+      # both it and the pre-commit golangci-lint hook.
+      - linters:
+          - gosec
+        path: ^test/
       - linters:
           - lll
         path: api/*
