@@ -25,6 +25,11 @@ linters:
     revive:
       rules:
         - name: comment-spacings
+          # kubebuilder's scaffolding greps for `//+kubebuilder:scaffold:...`
+          # with no space after the slashes; inserting one stops it finding the
+          # marker and injecting generated code there.
+          arguments:
+            - "+kubebuilder"
         - name: import-shadowing
   exclusions:
     generated: lax
