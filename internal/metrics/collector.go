@@ -27,6 +27,11 @@ import (
 
 const (
 	metricsNamespace = "openssf_scorecard"
+
+	labelConfig       = "config"
+	labelOrganization = "organization"
+	labelRepository   = "repository"
+	labelCheck        = "check"
 )
 
 // Collector manages Prometheus metrics for OpenSSF Scorecard data
@@ -59,7 +64,7 @@ func NewCollector() *Collector {
 				Name:      "overall_score",
 				Help:      "Overall OpenSSF Scorecard score for a repository (0-10)",
 			},
-			[]string{"config", "organization", "repository"},
+			[]string{labelConfig, labelOrganization, labelRepository},
 		),
 		checkScore: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -67,7 +72,7 @@ func NewCollector() *Collector {
 				Name:      "check_score",
 				Help:      "Score for individual OpenSSF Scorecard check (0-10, -1 for unavailable)",
 			},
-			[]string{"config", "organization", "repository", "check"},
+			[]string{labelConfig, labelOrganization, labelRepository, labelCheck},
 		),
 		checkStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -75,7 +80,7 @@ func NewCollector() *Collector {
 				Name:      "check_status",
 				Help:      "Status of individual OpenSSF Scorecard check (1=pass, 0=fail, -1=unavailable)",
 			},
-			[]string{"config", "organization", "repository", "check"},
+			[]string{labelConfig, labelOrganization, labelRepository, labelCheck},
 		),
 		lastUpdate: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -83,7 +88,7 @@ func NewCollector() *Collector {
 				Name:      "last_update_timestamp",
 				Help:      "Unix timestamp of the last scorecard data update",
 			},
-			[]string{"config", "organization", "repository"},
+			[]string{labelConfig, labelOrganization, labelRepository},
 		),
 		registeredMetrics: make(map[string]bool),
 	}
@@ -105,9 +110,9 @@ func (c *Collector) UpdateMetrics(configName, organization, repository string, d
 	defer c.mu.Unlock()
 
 	labels := prometheus.Labels{
-		"config":       configName,
-		"organization": organization,
-		"repository":   repository,
+		labelConfig:       configName,
+		labelOrganization: organization,
+		labelRepository:   repository,
 	}
 
 	// Update overall score
@@ -116,10 +121,10 @@ func (c *Collector) UpdateMetrics(configName, organization, repository string, d
 	// Update individual check scores and statuses
 	for _, check := range data.Checks {
 		checkLabels := prometheus.Labels{
-			"config":       configName,
-			"organization": organization,
-			"repository":   repository,
-			"check":        check.Name,
+			labelConfig:       configName,
+			labelOrganization: organization,
+			labelRepository:   repository,
+			labelCheck:        check.Name,
 		}
 
 		c.checkScore.With(checkLabels).Set(float64(check.Score))
