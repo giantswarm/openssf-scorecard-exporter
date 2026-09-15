@@ -66,7 +66,7 @@ func (c *Client) GetScorecardData(ctx context.Context, vcsPath, token string) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch scorecard data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("scorecard data not found for %s", vcsPath)

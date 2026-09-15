@@ -78,7 +78,7 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var configMap corev1.ConfigMap
 	if err := r.Get(ctx, req.NamespacedName, &configMap); err != nil {
 		// ConfigMap not found, likely deleted. Remove metrics for this config.
-		r.MetricsCollector.RemoveMetricsForConfig(req.NamespacedName.String())
+		r.MetricsCollector.RemoveMetricsForConfig(req.String())
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -199,7 +199,7 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 				// Update metrics with -1 score
 				r.MetricsCollector.UpdateMetrics(
-					req.NamespacedName.String(),
+					req.String(),
 					organization,
 					repo,
 					scorecardData,
@@ -219,7 +219,7 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Update metrics
 		r.MetricsCollector.UpdateMetrics(
-			req.NamespacedName.String(),
+			req.String(),
 			organization,
 			repo,
 			scorecardData,
