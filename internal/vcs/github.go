@@ -128,7 +128,7 @@ func (p *GitHubProvider) handleError(err error) error {
 	if ale, ok := err.(*github.AbuseRateLimitError); ok {
 		rlErr := NewRateLimitError(ProviderTypeGitHub, err.Error())
 		if ale.RetryAfter != nil {
-			rlErr.WithRetryAfter(*ale.RetryAfter)
+			rlErr = rlErr.WithRetryAfter(*ale.RetryAfter)
 		}
 		return rlErr
 	}

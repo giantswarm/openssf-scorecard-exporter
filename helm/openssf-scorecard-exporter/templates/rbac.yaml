@@ -46,4 +46,3 @@ roleRef:
   kind: Role
   name: {{ include "resource.default.name"  . }}
   apiGroup: rbac.authorization.k8s.io
-
