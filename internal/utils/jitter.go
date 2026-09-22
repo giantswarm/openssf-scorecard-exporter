@@ -22,8 +22,8 @@ func JitterRequeue(defaultDuration time.Duration, maxJitterPercent int, log logr
 		after = defaultDuration
 	}
 
+	// RequeueAfter on its own requeues; Result.Requeue is deprecated.
 	return ctrl.Result{
-		Requeue:      true,
 		RequeueAfter: after,
 	}
 }
