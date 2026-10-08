@@ -1,0 +1,1 @@
+CVE-2026-84445 until=2026-11-08 # google.golang.org/grpc@v1.84.0: patched in 1.84.0 per GHSA-2v4p-qf9q-27wj, OSS Index still flags it
