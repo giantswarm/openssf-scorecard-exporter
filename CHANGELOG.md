@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- Update `google.golang.org/grpc` to v1.84.0, `github.com/grpc-ecosystem/grpc-gateway/v2` to v2.31.0, `golang.org/x/mod` to v0.41.0 and the `go.opentelemetry.io/otel` modules to v1.47.0, which nancy reports as vulnerable.
+### Changed
+- Update `google.golang.org/grpc` to v1.84.0, `github.com/grpc-ecosystem/grpc-gateway/v2` to v2.31.0, `golang.org/x/mod` to v0.41.0 and the `go.opentelemetry.io/otel` modules to v1.47.0.
 
 ## [0.1.2] - 2026-06-03
 
