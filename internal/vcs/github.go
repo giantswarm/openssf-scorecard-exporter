@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v93/github"
 )
 
 const (
